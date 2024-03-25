@@ -25,25 +25,26 @@ fn cErr(err: E) c_int {
 }
 
 fn init(
-    _: [*c]fuse.struct_fuse_conn_info,
-    cfg: [*c]fuse.struct_fuse_config,
+    _: [*c]fuse.fuse_conn_info,
+    cfg: [*c]fuse.fuse_config,
 ) callconv(.C) ?*anyopaque {
     cfg.*.kernel_cache = 1;
-
     return null;
 }
 
 fn getattr(
     path: [*c]const u8,
-    stat: ?*fuse.struct_stat,
-    _: ?*fuse.struct_fuse_file_info,
+    stat: ?*fuse.stat,
+    _: ?*fuse.fuse_file_info,
 ) callconv(.C) c_int {
-    var st = mem.zeroes(fuse.struct_stat);
+    var st = mem.zeroes(fuse.stat);
     const p = mem.span(path);
 
     log.info("stat: {s}", .{p});
 
     if (mem.eql(u8, "/", p)) {
+        // Query for the root - for example, if mounted at /tmp/x, and `cd /tmp` or `ls /tmp` is executed,
+        // this will be called.
         st.st_mode = fuse.S_IFDIR | 0o0755;
         st.st_nlink = 2;
     } else if (mem.eql(u8, filename, p[1..])) {
@@ -64,8 +65,8 @@ fn readdir(
     buf: ?*anyopaque,
     filler: fuse.fuse_fill_dir_t,
     _: fuse.off_t,
-    _: ?*fuse.struct_fuse_file_info,
-    _: fuse.enum_fuse_readdir_flags,
+    _: ?*fuse.fuse_file_info,
+    _: fuse.fuse_readdir_flags,
 ) callconv(.C) c_int {
     const p = mem.span(path);
 
@@ -77,7 +78,7 @@ fn readdir(
     const names = [_][:0]const u8{ ".", "..", filename };
 
     for (names) |n| {
-        const ret = filler.?(buf, n, null, 0, 0);
+        const ret = filler.?(buf, n, null, 0, .{ .bits = 0 });
 
         if (ret > 0)
             log.err("readdir: {s}: {}", .{ p, ret });
@@ -88,7 +89,7 @@ fn readdir(
 
 fn open(
     path: [*c]const u8,
-    file_info: ?*fuse.struct_fuse_file_info,
+    file_info: ?*fuse.fuse_file_info,
 ) callconv(.C) c_int {
     const p = mem.span(path);
     const fi: *FileInfo = @ptrCast(@alignCast(file_info.?));
@@ -109,7 +110,7 @@ fn read(
     buf: [*c]u8,
     size: usize,
     offset: fuse.off_t,
-    _: ?*fuse.struct_fuse_file_info,
+    _: ?*fuse.fuse_file_info,
 ) callconv(.C) c_int {
     const p = mem.span(path);
     const off: usize = @intCast(offset);
@@ -132,7 +133,7 @@ fn read(
     return @intCast(s);
 }
 
-const ops = mem.zeroInit(fuse.struct_fuse_operations, .{
+const ops = mem.zeroInit(fuse.fuse_operations, .{
     .init = init,
     .getattr = getattr,
     .readdir = readdir,
