@@ -32,4 +32,5 @@ The lib files should be installed. Check the log to see where.
 
 - [libfuse Wiki](https://github.com/libfuse/libfuse/wiki)
 - [API Docs (Doxygen)](https://libfuse.github.io/doxygen/)
+- Inspired by [this article by Richard Palethorpe](https://richiejp.com/zig-fuse-one)
 
