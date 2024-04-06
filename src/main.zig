@@ -4,6 +4,8 @@ const mem = std.mem;
 const E = std.os.linux.E;
 const fuse = @import("fuse_header.zig");
 
+const fu = @import("fuse.zig");
+
 // May not be the correct size depending on the target because of the
 // bitfield: https://github.com/ziglang/zig/issues/1499
 const FileInfo = extern struct {
@@ -60,6 +62,8 @@ fn getattr(
     return 0;
 }
 
+const Stat = @import("std").os.linux.Stat;
+
 fn readdir(
     path: [*c]const u8,
     buf: ?*anyopaque,
@@ -93,6 +97,11 @@ fn open(
 ) callconv(.C) c_int {
     const p = mem.span(path);
     const fi: *FileInfo = @ptrCast(@alignCast(file_info.?));
+
+    // get context
+    const ctx = fuse.fuse_get_context();
+    // log uid
+    log.info("uid: {}", .{ctx.*.uid});
 
     log.info("open: {s}", .{p});
 

@@ -2,6 +2,7 @@
 const std = @import("std");
 // bring in types like uid_t
 const linux = std.os.linux;
+const S = linux.S;
 
 pub const FUSE_MAJOR_VERSION = @as(c_int, 3);
 pub const FUSE_MINOR_VERSION = @as(c_int, 16);

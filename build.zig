@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
 
     // link fuse3
     exe.linkSystemLibrary("fuse3");
+    exe.addIncludePath(.{ .path = "src/include" });
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
