@@ -324,7 +324,12 @@ pub const fuse_args = extern struct {
 };
 
 // manually added
-pub const fuse_file_info = extern struct { flags: c_int, todo_bits: c_uint, padding2: c_uint, fh: c_ulong, lock_owner: c_ulong, poll_events: c_uint };
+/// Information about an open file.
+///
+/// File Handles are created by the open, opendir, and create methods and closed by the release and releasedir methods. Multiple file handles may be concurrently open for the same file. Generally, a client will create one file handle per file descriptor, though in some cases multiple file descriptors can share a single file handle.
+pub const fuse_file_info_packed = packed struct { flags: c_int, writepage: u1, direct_io: u1, keep_cache: u1, parallel_direct_writes: u1, flush: u1, nonseekable: u1, cache_readdir: u1, noflush: u1, padding: u23, idk: u33, fh: c_ulong, lock_owner: c_ulong, poll_events: c_uint };
+
+pub const fuse_file_info = extern struct { flags: c_int, padding: u32, fh: c_ulong, lock_owner: c_ulong, poll_events: c_uint };
 
 pub const fuse_loop_config_v1 = extern struct {
     clone_fd: c_int = std.mem.zeroes(c_int),
@@ -729,7 +734,7 @@ pub const fuse_operations = extern struct {
     /// to the filesystem process.
     ///
     ///
-    open: ?*const fn ([*c]const u8, ?*fuse_file_info) callconv(.C) c_int,
+    open: ?*const fn ([*c]const u8, *fuse_file_info) callconv(.C) c_int,
     /// Read data from an open file
     ///
     /// Read should return exactly the number of bytes requested except
