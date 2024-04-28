@@ -734,7 +734,7 @@ pub const fuse_operations = extern struct {
     /// to the filesystem process.
     ///
     ///
-    open: ?*const fn ([*c]const u8, *fuse_file_info) callconv(.C) c_int,
+    open: ?*const fn ([*c]const u8, ?*fuse_file_info) callconv(.C) c_int,
     /// Read data from an open file
     ///
     /// Read should return exactly the number of bytes requested except

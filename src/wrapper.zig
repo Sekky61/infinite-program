@@ -21,16 +21,16 @@ pub fn main(argv: [][*:0]u8, op: Operations, private_data: anytype) i32 {
 fn create_operations() c.fuse_operations {
     return mem.zeroInit(c.fuse_operations, .{
         .open = open,
+        .read = read,
 
         .init = init,
         .getattr = getattr,
         .readdir = readdir,
-        .read = read,
     });
 }
 
 const filename: [:0]const u8 = "hello";
-const contents = "Alright, mate!\n";
+const contents = "Hello World\n";
 const E = std.os.linux.E;
 const log = std.log;
 
@@ -44,7 +44,8 @@ fn init(
     _: [*c]c.fuse_conn_info,
     cfg: [*c]c.fuse_config,
 ) callconv(.C) ?*anyopaque {
-    cfg.*.kernel_cache = 1;
+    log.info("internal init", .{});
+    cfg.*.kernel_cache = 0;
     return null;
 }
 
@@ -56,18 +57,21 @@ fn getattr(
     var st = mem.zeroes(c.stat);
     const p = mem.span(path);
 
-    log.info("stat: {s}", .{p});
-
     if (mem.eql(u8, "/", p)) {
+        log.info("stat of root: {s}", .{p});
         // Query for the root - for example, if mounted at /tmp/x, and `cd /tmp` or `ls /tmp` is executed,
         // this will be called.
         st.st_mode = c.S_IFDIR | 0o0755;
         st.st_nlink = 2;
     } else if (mem.eql(u8, filename, p[1..])) {
+        log.info("stat of file: {s}", .{p});
+        log.info("cl: {}", .{contents.len});
         st.st_mode = c.S_IFREG | 0o0444;
         st.st_nlink = 1;
-        st.st_size = contents.len;
+        st.st_size = contents.len + 10000;
+        st.st_uid = 1000;
     } else {
+        log.info("stat of unknown: {s}", .{p});
         return cErr(E.NOENT);
     }
 
@@ -93,7 +97,7 @@ fn readdir(
     if (!mem.eql(u8, "/", p))
         return cErr(E.NOENT);
 
-    const names = [_][:0]const u8{ ".", "..", filename };
+    const names = [_][:0]const u8{ ".", "..", filename, "boo" };
 
     for (names) |n| {
         const ret = filler.?(buf, n, null, 0, .{ .bits = 0 });
@@ -103,34 +107,6 @@ fn readdir(
     }
 
     return 0;
-}
-
-fn read(
-    path: [*c]const u8,
-    buf: [*c]u8,
-    size: usize,
-    offset: c.off_t,
-    _: ?*c.fuse_file_info,
-) callconv(.C) c_int {
-    const p = mem.span(path);
-    const off: usize = @intCast(offset);
-
-    log.info("read: {s},size={},offset={}", .{ p, size, offset });
-
-    if (!mem.eql(u8, filename, p[1..]))
-        return cErr(E.NOENT);
-
-    if (off >= contents.len)
-        return 0;
-
-    const s = if (off + size > contents.len)
-        contents.len - off
-    else
-        size;
-
-    @memcpy(buf[0..s], contents[off..]);
-
-    return @intCast(s);
 }
 
 /// File info structure.
@@ -170,14 +146,36 @@ pub const FileInfo = struct {
 };
 
 pub const Operations = struct {
-    open: *const fn (path: []const u8, fi: *FileInfo) i32,
+    open: *const fn (path: []const u8, fi: ?FileInfo) i32,
+    read: *const fn (path: []const u8, buf: []u8, offset: i64, fi: ?FileInfo) i32,
 };
 
 fn open(
     path: [*c]const u8,
-    file_info: *c.fuse_file_info,
+    file_info: ?*c.fuse_file_info,
 ) callconv(.C) c_int {
-    var fi = FileInfo.from_c(file_info);
+    var fi: ?FileInfo = null;
+    if (file_info) |info| {
+        fi = FileInfo.from_c(info);
+    }
     const path_slice: [:0]const u8 = std.mem.span(path);
-    return user_ops.open(path_slice, &fi);
+    return user_ops.open(path_slice, fi);
+}
+
+fn read(
+    path: [*c]const u8,
+    buf: [*c]u8,
+    size: usize,
+    offset: c.off_t,
+    file_info: ?*c.fuse_file_info,
+) callconv(.C) c_int {
+    log.info("internal read: {s}", .{path});
+    var fi: ?FileInfo = null;
+    if (file_info) |info| {
+        fi = FileInfo.from_c(info);
+    }
+    const path_slice: [:0]const u8 = std.mem.span(path);
+    const ptr: [*]u8 = @ptrCast(@alignCast(buf));
+    const slice = ptr[0..size];
+    return user_ops.read(path_slice, slice, offset, fi);
 }
