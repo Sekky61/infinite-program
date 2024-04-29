@@ -81,8 +81,8 @@ pub const FileInfo = struct {
 pub const Operations = struct {
     init: *const fn () ?*anyopaque,
     open: *const fn (path: []const u8, fi: ?FileInfo) i32,
-    read: *const fn (path: []const u8, buf: []u8, offset: i64, fi: ?FileInfo) i32,
-    readdir: *const fn (path: []const u8, buf: ?*anyopaque, filler: c.fuse_fill_dir_t, offset: i64, fi: ?FileInfo, flags: ReadDirFlags) i32,
+    read: *const fn (path: []const u8, buf: []u8, offset: c.off_t, fi: ?FileInfo) i32,
+    readdir: *const fn (path: []const u8, filler: ReadDirFiller, fi: ?FileInfo, flags: ReadDirFlags) i32,
     getattr: *const fn (path: []const u8, stat: ?*Stat, fi: ?FileInfo) i32,
 };
 
@@ -114,13 +114,41 @@ pub const ReadDirFlags = packed struct {
 fn readdir(
     path: [*c]const u8,
     buf: ?*anyopaque,
-    filler: c.fuse_fill_dir_t,
-    _: c.off_t,
-    _: ?*c.fuse_file_info,
-    _: c.fuse_readdir_flags,
+    c_filler: c.fuse_fill_dir_t,
+    offset: c.off_t,
+    file_info: ?*c.fuse_file_info,
+    c_flags: c.fuse_readdir_flags,
 ) callconv(.C) c_int {
     const path_slice: [:0]const u8 = std.mem.span(path);
-    return user_ops.readdir(path_slice, buf, filler, 0, null, ReadDirFlags{ .Plus = false });
+    const filler = ReadDirFiller{ .filler = c_filler, .buf = buf, .offset = offset };
+    const fi = map_file_info(file_info);
+    const flags = map_readdir_flags(c_flags);
+    return user_ops.readdir(path_slice, filler, fi, flags);
+}
+
+pub const ReadDirFiller = struct {
+    filler: c.fuse_fill_dir_t,
+    buf: ?*anyopaque,
+    offset: c.off_t,
+
+    pub fn call(self: ReadDirFiller, name: []const u8, stat: ?*Stat, offset: i64) c_int {
+        if (self.filler) |filler| {
+            const flags: c.fuse_fill_dir_flags = .{ .bits = 0 }; // todo plus mode
+            return filler(self.buf, @ptrCast(name), stat, offset, flags);
+        }
+        return 0;
+    }
+};
+
+fn map_readdir_flags(flags: c.fuse_readdir_flags) ReadDirFlags {
+    return ReadDirFlags{ .Plus = flags.bits == 0 };
+}
+
+fn map_file_info(fi: ?*c.fuse_file_info) ?FileInfo {
+    if (fi) |fi_inner| {
+        return FileInfo.from_c(fi_inner);
+    }
+    return null;
 }
 
 fn open(

@@ -52,7 +52,7 @@ fn myRead(path: []const u8, buf: []u8, offset: i64, _: ?fu.FileInfo) i32 {
     return @intCast(s);
 }
 
-fn myReadDir(path: []const u8, buf: ?*anyopaque, filler: fu.c.fuse_fill_dir_t, _: i64, _: ?fu.FileInfo, _: fu.ReadDirFlags) i32 {
+fn myReadDir(path: []const u8, filler: fu.ReadDirFiller, _: ?fu.FileInfo, _: fu.ReadDirFlags) i32 {
     log.info("readdir: {s}", .{path});
 
     if (!mem.eql(u8, "/", path))
@@ -61,7 +61,7 @@ fn myReadDir(path: []const u8, buf: ?*anyopaque, filler: fu.c.fuse_fill_dir_t, _
     const names = [_][:0]const u8{ ".", "..", filename, "boo" };
 
     for (names) |n| {
-        const ret = filler.?(buf, n, null, 0, .{ .bits = 0 });
+        const ret = filler.call(n, null, 0);
 
         if (ret > 0)
             log.err("readdir: {s}: {}", .{ path, ret });
