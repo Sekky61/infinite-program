@@ -293,23 +293,26 @@ pub const Flock = linux.Flock;
 pub const __syscall_slong_t = i64;
 
 // manually added
-pub const stat = extern struct {
-    st_dev: dev_t = std.mem.zeroes(dev_t),
-    st_ino: ino_t = std.mem.zeroes(ino_t),
-    st_nlink: nlink_t = std.mem.zeroes(nlink_t),
-    st_mode: mode_t = std.mem.zeroes(mode_t),
-    st_uid: uid_t = std.mem.zeroes(uid_t),
-    st_gid: gid_t = std.mem.zeroes(gid_t),
-    __pad0: c_int = std.mem.zeroes(c_int),
-    st_rdev: dev_t = std.mem.zeroes(dev_t),
-    st_size: off_t = std.mem.zeroes(off_t),
-    st_blksize: blksize_t = std.mem.zeroes(blksize_t),
-    st_blocks: blkcnt_t = std.mem.zeroes(blkcnt_t),
-    st_atim: timespec = std.mem.zeroes(timespec),
-    st_mtim: timespec = std.mem.zeroes(timespec),
-    st_ctim: timespec = std.mem.zeroes(timespec),
-    __glibc_reserved: [3]__syscall_slong_t = std.mem.zeroes([3]__syscall_slong_t),
-};
+// The translated layout was bad
+pub const stat = @import("std").os.linux.Stat;
+
+// pub const stat = extern struct {
+//     st_dev: dev_t = std.mem.zeroes(dev_t),
+//     st_ino: ino_t = std.mem.zeroes(ino_t),
+//     st_nlink: nlink_t = std.mem.zeroes(nlink_t),
+//     st_mode: mode_t = std.mem.zeroes(mode_t),
+//     st_uid: uid_t = std.mem.zeroes(uid_t),
+//     st_gid: gid_t = std.mem.zeroes(gid_t),
+//     __pad0: c_int = std.mem.zeroes(c_int),
+//     st_rdev: dev_t = std.mem.zeroes(dev_t),
+//     st_size: off_t = std.mem.zeroes(off_t),
+//     st_blksize: blksize_t = std.mem.zeroes(blksize_t),
+//     st_blocks: blkcnt_t = std.mem.zeroes(blkcnt_t),
+//     st_atim: timespec = std.mem.zeroes(timespec),
+//     st_mtim: timespec = std.mem.zeroes(timespec),
+//     st_ctim: timespec = std.mem.zeroes(timespec),
+//     __glibc_reserved: [3]__syscall_slong_t = std.mem.zeroes([3]__syscall_slong_t),
+// };
 
 // manually added
 pub const fuse_opt = extern struct {

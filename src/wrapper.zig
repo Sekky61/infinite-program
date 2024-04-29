@@ -5,6 +5,8 @@ pub const c = @import("bindings.zig");
 pub const std = @import("std");
 const mem = std.mem;
 
+pub const Stat = @import("std").os.linux.Stat;
+
 var user_ops: Operations = undefined;
 
 /// Main function of FUSE.
@@ -38,75 +40,6 @@ fn cErr(err: E) c_int {
     const n: c_int = @intFromEnum(err);
 
     return -n;
-}
-
-fn init(
-    _: [*c]c.fuse_conn_info,
-    cfg: [*c]c.fuse_config,
-) callconv(.C) ?*anyopaque {
-    log.info("internal init", .{});
-    cfg.*.kernel_cache = 0;
-    return null;
-}
-
-fn getattr(
-    path: [*c]const u8,
-    stat: ?*c.stat,
-    _: ?*c.fuse_file_info,
-) callconv(.C) c_int {
-    var st = mem.zeroes(c.stat);
-    const p = mem.span(path);
-
-    if (mem.eql(u8, "/", p)) {
-        log.info("stat of root: {s}", .{p});
-        // Query for the root - for example, if mounted at /tmp/x, and `cd /tmp` or `ls /tmp` is executed,
-        // this will be called.
-        st.st_mode = c.S_IFDIR | 0o0755;
-        st.st_nlink = 2;
-    } else if (mem.eql(u8, filename, p[1..])) {
-        log.info("stat of file: {s}", .{p});
-        log.info("cl: {}", .{contents.len});
-        st.st_mode = c.S_IFREG | 0o0444;
-        st.st_nlink = 1;
-        st.st_size = contents.len + 10000;
-        st.st_uid = 1000;
-    } else {
-        log.info("stat of unknown: {s}", .{p});
-        return cErr(E.NOENT);
-    }
-
-    stat.?.* = st;
-
-    return 0;
-}
-
-const Stat = @import("std").os.linux.Stat;
-
-fn readdir(
-    path: [*c]const u8,
-    buf: ?*anyopaque,
-    filler: c.fuse_fill_dir_t,
-    _: c.off_t,
-    _: ?*c.fuse_file_info,
-    _: c.fuse_readdir_flags,
-) callconv(.C) c_int {
-    const p = mem.span(path);
-
-    log.info("readdir: {s}", .{p});
-
-    if (!mem.eql(u8, "/", p))
-        return cErr(E.NOENT);
-
-    const names = [_][:0]const u8{ ".", "..", filename, "boo" };
-
-    for (names) |n| {
-        const ret = filler.?(buf, n, null, 0, .{ .bits = 0 });
-
-        if (ret > 0)
-            log.err("readdir: {s}: {}", .{ p, ret });
-    }
-
-    return 0;
 }
 
 /// File info structure.
@@ -146,9 +79,49 @@ pub const FileInfo = struct {
 };
 
 pub const Operations = struct {
+    init: *const fn () ?*anyopaque,
     open: *const fn (path: []const u8, fi: ?FileInfo) i32,
     read: *const fn (path: []const u8, buf: []u8, offset: i64, fi: ?FileInfo) i32,
+    readdir: *const fn (path: []const u8, buf: ?*anyopaque, filler: c.fuse_fill_dir_t, offset: i64, fi: ?FileInfo, flags: ReadDirFlags) i32,
+    getattr: *const fn (path: []const u8, stat: ?*Stat, fi: ?FileInfo) i32,
 };
+
+fn init(
+    _: [*c]c.fuse_conn_info,
+    cfg: [*c]c.fuse_config,
+) callconv(.C) ?*anyopaque {
+    cfg.*.kernel_cache = 0;
+    return user_ops.init();
+}
+
+fn getattr(
+    path: [*c]const u8,
+    stat: ?*Stat,
+    file_info: ?*c.fuse_file_info,
+) callconv(.C) c_int {
+    const path_slice: [:0]const u8 = std.mem.span(path);
+    var fi: ?FileInfo = null;
+    if (file_info) |info| {
+        fi = FileInfo.from_c(info);
+    }
+    return user_ops.getattr(path_slice, stat, fi);
+}
+
+pub const ReadDirFlags = packed struct {
+    Plus: bool,
+};
+
+fn readdir(
+    path: [*c]const u8,
+    buf: ?*anyopaque,
+    filler: c.fuse_fill_dir_t,
+    _: c.off_t,
+    _: ?*c.fuse_file_info,
+    _: c.fuse_readdir_flags,
+) callconv(.C) c_int {
+    const path_slice: [:0]const u8 = std.mem.span(path);
+    return user_ops.readdir(path_slice, buf, filler, 0, null, ReadDirFlags{ .Plus = false });
+}
 
 fn open(
     path: [*c]const u8,
